@@ -7,9 +7,27 @@
 import json
 import logging
 from typing import Optional, Dict, Any, List
+from dataclasses import dataclass
 from xml.etree import ElementTree as ET
 
 logger = logging.getLogger(__name__)
+
+@dataclass
+class OLAPReport:
+    columns: List[str]
+    rows: List[List[Any]]
+
+    summary: Optional[Dict[str, Any]]
+    raw: Dict[str, Any]
+
+    def to_dicts(self) -> List[Dict[str, Any]]:
+        """
+        Преобразовать строки отчета в list[dict]
+        """
+        return [
+            dict(zip(self.columns, row))
+            for row in self.rows
+        ]
 
 
 class OLAPReports:
@@ -181,7 +199,7 @@ class OLAPReports:
         """
         Построить OLAP-отчет.
 
-        Эндпоинт: GET /resto/api/v2/reports/olap
+        Эндпоинт: POST /resto/api/v2/reports/olap
 
         Args:
             report_type: Тип отчета (например, "SALES")
@@ -192,7 +210,7 @@ class OLAPReports:
             **kwargs: Дополнительные параметры (groupByRowFields, groupByColFields и т.д.)
 
         Returns:
-            str: XML с результатами отчета
+            str: JSON с результатами отчета
 
         Raises:
             requests.RequestException: Ошибка при выполнении запроса
@@ -237,6 +255,67 @@ class OLAPReports:
 
         logger.info("Отчет построен успешно")
         return response.text
+
+    def build_report_v2(
+            self,
+            report_type: str,
+            date_from: Optional[str] = None,
+            date_to: Optional[str] = None,
+            group_by_row_fields: Optional[List[str]] = None,
+            aggregate_fields: Optional[List[str]] = None,
+            filters: Optional[Dict[str, Any]] = None,
+            summary: bool = True,
+    ) -> OLAPReport:
+
+        payload = {"reportType": report_type}
+
+        if group_by_row_fields:
+            payload["groupByRowFields"] = group_by_row_fields
+        if aggregate_fields:
+            payload["aggregateFields"] = aggregate_fields
+        if filters:
+            payload["filters"] = filters
+
+        params = {"summary": str(summary).lower()}
+        if date_from:
+            params["dateFrom"] = date_from
+        if date_to:
+            params["dateTo"] = date_to
+
+        response = self.sdk.post(
+            "/v2/reports/olap",
+            params=params,
+            json=payload,
+        )
+
+        data = response.json()
+
+        columns: List[str] = []
+        rows: List[str] = []
+        group_by_row_fields = group_by_row_fields or []
+        aggregate_fields = aggregate_fields or []
+
+        columns.extend(group_by_row_fields)
+        rows.extend(aggregate_fields)
+
+        # rows = data.get("data", [])
+
+        summary_dict: Optional[Dict[str, Any]] = None
+        raw_summary = data.get("summary") or data.get("totals")
+
+        if raw_summary and aggregate_fields:
+            offset = len(group_by_row_fields)
+            summary_dict = {
+                field: raw_summary[offset + i]
+                for i, field in enumerate(aggregate_fields)
+            }
+
+        return OLAPReport(
+            columns=columns,
+            rows=rows,
+            summary=summary_dict,
+            raw=data,
+        )
 
     def get_available_reports(self) -> List[str]:
         """
