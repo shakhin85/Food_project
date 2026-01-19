@@ -1,0 +1,46 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+venv/
+ENV/
+
+# Environment and sensitive files
+.env
+.env.local
+.env.*.local
+.token
+*.key
+*.pem
+credentials.json
+
+# Cache directories
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.coverage
+.coverage.*
+htmlcov/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Local test data
+test_data/
+*.db
+*.sqlite
