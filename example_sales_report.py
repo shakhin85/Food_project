@@ -1,8 +1,13 @@
 from datetime import datetime, timedelta
 from pprint import pprint
+
 import pandas as pd
 
 from src.iiko_sdk import IikoSDK
+
+pd.options.display.width = 1000
+pd.options.display.max_columns = 100
+
 
 ISO_MS = "%Y-%m-%dT%H:%M:%S.%f"
 
@@ -23,7 +28,9 @@ def fmt_dt_no_ms(dt: datetime) -> str:
 
 def next_monday_00(dt: datetime) -> datetime:
     dt0 = dt.replace(hour=0, minute=0, second=0, microsecond=0)
-    monday_this = dt0 - timedelta(days=dt0.weekday())  # понедельник текущей недели 00:00
+    monday_this = dt0 - timedelta(
+        days=dt0.weekday()
+    )  # понедельник текущей недели 00:00
     monday_next = monday_this + timedelta(days=7)
     return monday_next if dt0 >= monday_this else monday_this
 
@@ -59,13 +66,18 @@ def main():
     overall_from = "2026-01-01T00:00:00.000"
     overall_to = "2026-02-02T00:00:00.000"
 
-    group_by = ["Department", "OpenDate.Typed", "WaiterName", "PayTypes"]
-    aggs = ["DishSumInt",
-            "DiscountSum",
-            "IncreaseSum",
-            "GuestNum",
-            # "DishDiscountSumInt.averageByGuest",
-            ]
+    aggs = [
+        "DiscountSum",
+        "DishDiscountSumInt",
+        "discountWithoutVAT",
+        "DishDiscountSumInt.withoutVAT",
+        "sumAfterDiscountWithoutVAT",
+        "IncreaseSum",
+        "GuestNum",
+        "Bonus.Sum",
+    ]
+
+    group_by = ["OpenDate.Typed", "Department", "WaiterName", "PayTypes"]
 
     dt_from = parse_dt(overall_from)
     dt_to = parse_dt(overall_to)
@@ -81,8 +93,8 @@ def main():
         "schema": {
             "groupByRowFields": group_by,
             "aggregateFields": aggs,
-            "columns": group_by + aggs
-        }
+            "columns": group_by + aggs,
+        },
     }
 
     cur = dt_from
@@ -107,7 +119,7 @@ def main():
                         "from": fmt_dt_ms(cur),
                         "to": fmt_dt_ms(week_end),
                     }
-                }
+                },
             )
 
             raw = report.raw or {}
@@ -118,32 +130,43 @@ def main():
             # 2) Склеиваем summary/totals если они есть
             #    (у iiko иногда ключ "summary", иногда "totals")
             if "summary" in raw:
-                merged_raw["summary"] = add_summary_arrays(merged_raw["summary"], raw.get("summary"))
+                merged_raw["summary"] = add_summary_arrays(
+                    merged_raw["summary"], raw.get("summary")
+                )
             if "totals" in raw:
-                merged_raw["totals"] = add_summary_arrays(merged_raw["totals"], raw.get("totals"))
+                merged_raw["totals"] = add_summary_arrays(
+                    merged_raw["totals"], raw.get("totals")
+                )
 
             # 3) Сохраняем чанк как есть (для контроля)
-            merged_raw["chunks"].append({
-                "from": fmt_dt_ms(cur),
-                "to": fmt_dt_ms(week_end),
-                "raw": raw,
-                "rows": len(raw.get("data", [])),
-            })
+            merged_raw["chunks"].append(
+                {
+                    "from": fmt_dt_ms(cur),
+                    "to": fmt_dt_ms(week_end),
+                    "raw": raw,
+                    "rows": len(raw.get("data", [])),
+                }
+            )
 
-            print(f"Chunk: {fmt_dt_ms(cur)} -> {fmt_dt_ms(week_end)} | rows: {len(raw.get('data', []))}")
+            print(
+                f"Chunk: {fmt_dt_ms(cur)} -> {fmt_dt_ms(week_end)} | rows: {len(raw.get('data', []))}"
+            )
 
             cur = week_end
 
-    pprint({
-        "columns": merged_raw["schema"]["columns"],
-        "row_count": len(merged_raw["data"]),
-        "has_summary": merged_raw["summary"] is not None,
-        "has_totals": merged_raw["totals"] is not None,
-        "chunks": len(merged_raw["chunks"]),
-    })
+    pprint(
+        {
+            "columns": merged_raw["schema"]["columns"],
+            "row_count": len(merged_raw["data"]),
+            "has_summary": merged_raw["summary"] is not None,
+            "has_totals": merged_raw["totals"] is not None,
+            "chunks": len(merged_raw["chunks"]),
+        }
+    )
 
     # итоговый "склеенный raw"
-    report_data = pd.DataFrame(merged_raw.get('data'))
+    report_data = pd.DataFrame(merged_raw.get("data"))
+    print(report_data)
 
 
 if __name__ == "__main__":
